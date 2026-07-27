@@ -32,8 +32,8 @@ $ATTEMPTS_FILE = __DIR__ . "/login_attempts.json";
 // TODO: replace with your real domain(s). Needed because credentialed
 // requests (the admin login/session cookie) cannot use "*".
 $ALLOWED_ORIGINS = [
-    "https://yourdomain.com",
-    "http://localhost",
+    "https://aswattv.vercel.app",
+    "aswattv.vercel.app",
 ];
 
 $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
