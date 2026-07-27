@@ -1,0 +1,38 @@
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+<Files "data.json">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+<Files "login_attempts.json">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+# Block any stray backup/config files that sometimes get left on shared hosts
+<FilesMatch "\.(json|bak|old|backup|log|sql|env)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+<Files "data.json.txt">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+Options -Indexes
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(html|php)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires 0
+    </FilesMatch>
+    # Basic hardening headers
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>

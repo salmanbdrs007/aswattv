@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LiveTV - Watch Live</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://jwpsrv.com/library/XpMfzFwiEeOfZhIxOQfUww.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root { --bg: #0a0a0a; --card: #141414; --accent: #e50914; --text: #ffffff; --border: rgba(255,255,255,0.06); --success: #00c853; --danger: #ff1744; --warning: #ffea00; --info: #2979ff; --radius: 8px; --text2: #aaa; --text3: #666; }
+        body, html { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 10px; }
+        .app-container { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
+        .player-section { flex: 3.2; display: flex; flex-direction: column; background: #000; padding: 12px 16px; gap: 10px; box-sizing: border-box; min-width: 0; height: 100vh; overflow: hidden; }
+        .video-container { position: relative; padding-top: 48%; background: #000; border-radius: 14px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.9); flex-shrink: 0; min-height: 200px; }
+        #main-player { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; }
+        .player-loading-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10; backdrop-filter: blur(8px); }
+        .player-loading-overlay.show { display: flex; }
+        .player-loading-overlay .loading-spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .player-loading-overlay .loading-logo { width: 70px; height: 70px; border-radius: 50%; background: #fff; padding: 5px; margin-bottom: 10px; box-shadow: 0 0 30px rgba(229,9,20,0.3); animation: pulse 1.5s ease-in-out infinite; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(229,9,20,0.3); } 50% { transform: scale(1.05); box-shadow: 0 0 50px rgba(229,9,20,0.5); } }
+        .player-loading-overlay .loading-logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 50%; }
+        .player-loading-overlay .loading-text { color: rgba(255,255,255,0.8); font-size: 1rem; font-weight: 600; margin-top: 6px; }
+        .player-loading-overlay .loading-sub-text { color: rgba(255,255,255,0.4); font-size: 0.75rem; margin-top: 4px; }
+        .player-loading-overlay .loading-progress { width: 200px; height: 2px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 10px; overflow: hidden; }
+        .player-loading-overlay .loading-progress .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #ff6b7a); border-radius: 2px; animation: loadingProgress 2s ease-in-out infinite; }
+        @keyframes loadingProgress { 0% { width: 0%; } 50% { width: 70%; } 100% { width: 100%; } }
+        .player-error { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,0.6); text-align: center; font-size: 1rem; pointer-events: none; z-index: 5; }
+        .preroll-ad-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 20; }
+        .preroll-ad-overlay.show { display: flex; }
+        .preroll-ad-content { width: 100%; height: 100%; display: flex; align-items: stretch; justify-content: center; overflow-y: auto; padding: 10px; box-sizing: border-box; }
+        .preroll-ad-content img, .preroll-ad-content iframe { max-width: 100%; max-height: 100%; }
+        .preroll-skip-btn { position: absolute; bottom: 14px; right: 14px; background: rgba(0,0,0,0.75); color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; padding: 6px 14px; font-size: 0.75rem; cursor: pointer; z-index: 21; transition: 0.2s; }
+        .preroll-skip-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .preroll-skip-btn:not(:disabled):hover { background: var(--accent); border-color: var(--accent); }
+        .video-info { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; flex-shrink: 0; }
+        .video-info h1 { margin: 0; font-size: 1.5rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%; }
+        .channel-badge { font-size: 0.75rem; background: rgba(229,9,20,0.15); color: var(--accent); padding: 4px 16px; border-radius: 20px; font-weight: 600; border: 1px solid rgba(229,9,20,0.2); text-transform: uppercase; letter-spacing: 0.5px; }
+        .notice-bar { background: linear-gradient(135deg, rgba(229,9,20,0.12), rgba(229,9,20,0.04)); border: 1px solid rgba(229,9,20,0.2); border-radius: 10px; padding: 10px 18px; display: none; align-items: center; gap: 14px; flex-shrink: 0; font-size: 0.85rem; color: var(--text2); backdrop-filter: blur(10px); transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(229,9,20,0.05); }
+        .notice-bar.show { display: flex; animation: slideDown 0.4s ease; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .notice-bar .notice-icon { font-size: 0.9rem; background: rgba(229,9,20,0.15); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent); }
+        .notice-bar .notice-text { flex: 1; color: rgba(255,255,255,0.85); font-weight: 500; letter-spacing: 0.3px; }
+        .notice-bar .notice-text-viewport { flex: 1; overflow: hidden; white-space: nowrap; position: relative; }
+        .notice-bar .notice-text-viewport .notice-text { flex: none; display: inline-block; white-space: nowrap; }
+        .notice-bar .notice-text-viewport .notice-text.marquee { animation-name: noticeMarquee; animation-timing-function: linear; animation-iteration-count: infinite; }
+        @keyframes noticeMarquee { 0% { transform: translateX(var(--notice-start, 0px)); } 100% { transform: translateX(var(--notice-end, 0px)); } }
+        .sidebar-ad-container { display: none; background: rgba(255,255,255,0.02); border-radius: 8px; padding: 4px; margin: 0 12px 6px; border: 1px solid var(--border); text-align: center; flex-shrink: 0; min-height: 40px; max-height: 90px; overflow: hidden; }
+        .sidebar-ad-container.show { display: block; }
+        .native-ad-container { display: none; background: rgba(255,255,255,0.02); border-radius: 8px; padding: 4px; border: 1px solid var(--border); text-align: center; flex-shrink: 0; min-height: 40px; max-height: 100px; overflow: hidden; }
+        .native-ad-container.show { display: block; }
+        .sidebar-ad-container .ad-label, .native-ad-container .ad-label { font-size: 0.4rem; color: rgba(255,255,255,0.15); margin-bottom: 2px; }
+        .audio-track-select { position: absolute; top: 8px; right: 8px; z-index: 6; background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; font-size: 0.65rem; padding: 3px 6px; display: none; }
+        .audio-track-select.show { display: block; }
+        .telegram-float-btn { display: none; position: fixed; bottom: 70px; right: 16px; z-index: 50; width: 48px; height: 48px; border-radius: 50%; background: #229ED9; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.4); text-decoration: none; }
+        .telegram-float-btn.show { display: flex; }
+        .telegram-float-btn svg { width: 26px; height: 26px; fill: #fff; }
+        @media(max-width:820px) { .telegram-float-btn { bottom: 16px; right: 16px; width: 44px; height: 44px; } }
+        .notice-bar .notice-close { background: rgba(255,255,255,0.05); border: none; color: var(--text3); cursor: pointer; font-size: 1.2rem; padding: 0 8px; border-radius: 6px; transition: 0.3s; line-height: 1.5; }
+        .notice-bar .notice-close:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+        .banner-ad-container { display: none; background: rgba(255,255,255,0.02); border-radius: 8px; padding: 4px; border: 1px solid var(--border); text-align: center; flex-shrink: 0; min-height: 60px; max-height: 100px; overflow: hidden; }
+        .banner-ad-container.show { display: block; }
+        .banner-ad-container .ad-label { font-size: 0.4rem; color: rgba(255,255,255,0.15); margin-bottom: 2px; }
+        .banner-ad-container #banner-ad { min-height: 50px; display: flex; align-items: center; justify-content: center; }
+        .admin-hidden-btn { position: fixed; bottom: 20px; right: 20px; background: transparent; color: rgba(255,255,255,0.05); border: none; font-size: 0.5rem; cursor: pointer; z-index: 999; transition: 0.3s; }
+        .admin-hidden-btn:hover { color: rgba(255,255,255,0.3); }
+        .sidebar { flex: 1; min-width: 340px; max-width: 460px; background: var(--card); display: flex; flex-direction: column; border-left: 1px solid var(--border); height: 100vh; overflow: hidden; }
+        .search-container { padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--card); z-index: 5; }
+        .search-header { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+        .search-header .notice-small { flex: 1; font-size: 0.6rem; color: rgba(255,255,255,0.5); background: rgba(229,9,20,0.06); padding: 3px 10px; border-radius: 16px; border: 1px solid rgba(229,9,20,0.08); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+        .loading-bar { display: none; width: 100%; height: 2px; background: var(--border); margin-bottom: 4px; border-radius: 2px; overflow: hidden; }
+        .loading-bar.show { display: block; }
+        .loading-bar .progress { height: 100%; width: 0%; background: var(--accent); border-radius: 2px; animation: loading 1.5s infinite; }
+        @keyframes loading { 0% { width: 0%; } 50% { width: 70%; } 100% { width: 100%; } }
+        #channel-search { width: 100%; padding: 5px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: #fff; margin-bottom: 6px; outline: none; font-size: 0.75rem; transition: 0.3s; height: 32px; }
+        #channel-search:focus { border-color: var(--accent); background: rgba(255,255,255,0.07); }
+        #channel-search::placeholder { color: rgba(255,255,255,0.3); }
+        .category-tabs { display: flex; flex-wrap: wrap; gap: 3px; }
+        .cat-tab { padding: 2px 10px; border-radius: 12px; background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.5); font-size: 0.6rem; font-weight: 500; border: 1px solid transparent; cursor: pointer; transition: 0.25s; }
+        .cat-tab:hover { background: rgba(255,255,255,0.08); color: #fff; }
+        .cat-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .channel-count-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 0.6rem; color: var(--text2); background: var(--card); z-index: 5; }
+        .channel-count-bar .count-num { color: var(--text); font-weight: 600; background: rgba(255,255,255,0.05); padding: 1px 10px; border-radius: 10px; font-size: 0.7rem; }
+        .channel-list-wrapper { flex: 1; overflow: hidden; position: relative; min-height: 0; }
+        .channel-list { list-style: none; margin: 0; padding: 5px 8px; display: grid; grid-template-columns: repeat(4, 1fr) !important; gap: 5px; overflow-y: auto !important; align-content: start; height: 100%; max-height: 100%; scroll-behavior: smooth; }
+        .channel-list::-webkit-scrollbar { width: 4px; }
+        .channel-list::-webkit-scrollbar-track { background: var(--bg); }
+        .channel-list::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 10px; }
+        .channel-item { background: rgba(255,255,255,0.04); border-radius: var(--radius); cursor: pointer; text-align: center; transition: 0.2s; border: 2px solid transparent; height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px; position: relative; overflow: hidden; }
+        .channel-item:hover { background: rgba(255,255,255,0.08); transform: translateY(-2px); }
+        .channel-item.active { border-color: var(--accent); background: rgba(229,9,20,0.1); }
+        .channel-item.active::after { content: '\25CF'; position: absolute; top: 4px; right: 6px; font-size: 0.5rem; color: var(--accent); }
+        .channel-item.hidden-channel { opacity: 0.4; border-color: #555; }
+        .channel-item.offline-channel { border-color: var(--danger); background: rgba(255,0,0,0.08); }
+        .channel-item.offline-channel .channel-status-badge { background: rgba(255,0,0,0.2); color: var(--danger); }
+        .logo-wrapper { width: 38px; height: 38px; min-height: 28px; min-width: 28px; margin-bottom: 3px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 3px; box-sizing: border-box; flex-shrink: 0; transition: 0.3s; }
+        .channel-item:hover .logo-wrapper { transform: scale(1.08); }
+        .channel-logo { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .channel-name { font-size: 0.55rem; font-weight: 600; color: rgba(255,255,255,0.9); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; word-break: break-word; max-width: 100%; padding: 0 2px; }
+        .channel-status-badge { font-size: 0.35rem; padding: 1px 6px; border-radius: 4px; margin-top: 2px; display: inline-block; line-height: 1.3; }
+        .channel-status-badge.active { background: rgba(0,200,83,0.2); color: var(--success); }
+        .channel-status-badge.hidden { background: rgba(255,255,255,0.1); color: #888; }
+        .channel-status-badge.checking { background: rgba(255,200,0,0.2); color: var(--warning); animation: blink 1s infinite; }
+        .channel-status-badge.online { background: rgba(0,200,83,0.2); color: var(--success); }
+        .channel-status-badge.offline { background: rgba(255,0,0,0.2); color: var(--danger); }
+        .channel-status-badge.dead { background: rgba(255,0,0,0.2); color: var(--danger); }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        /* ===== Tablet / mid-size ===== */
+        @media(max-width:1100px) { .sidebar { min-width: 300px; max-width: 380px; } .channel-list { grid-template-columns: repeat(3, 1fr) !important; } }
+        /* ===== Large desktop monitors ===== */
+        @media(min-width:1400px) { .sidebar { min-width: 380px; max-width: 480px; } .channel-list { grid-template-columns: repeat(5, 1fr) !important; gap: 8px; } .channel-item { height: 92px; } .logo-wrapper { width: 44px; height: 44px; } .channel-name { font-size: 0.62rem; } .video-info h1 { font-size: 1.7rem; } }
+        /* ===== Smart TV / very large screens (10-foot UI) ===== */
+        @media(min-width:1920px) { html { font-size: 19px; } .sidebar { min-width: 440px; max-width: 560px; } .channel-list { grid-template-columns: repeat(5, 1fr) !important; gap: 10px; } .channel-item { height: 110px; border-radius: 12px; } .logo-wrapper { width: 54px; height: 54px; } .channel-name { font-size: 0.68rem; } .video-info h1 { font-size: 2.1rem; } .channel-badge { font-size: 0.9rem; padding: 6px 20px; } #channel-search { height: 40px; font-size: 0.9rem; } .cat-tab { font-size: 0.72rem; padding: 4px 14px; } .notice-bar { font-size: 1rem; padding: 12px 22px; } }
+        @media(min-width:2560px) { html { font-size: 22px; } .sidebar { min-width: 520px; max-width: 640px; } .channel-list { grid-template-columns: repeat(6, 1fr) !important; } .channel-item { height: 130px; } .logo-wrapper { width: 64px; height: 64px; } }
+        @media(max-width:360px) { .channel-list { grid-template-columns: repeat(3, 1fr) !important; } }
+        @media(max-width:820px) and (orientation:landscape) { .sidebar { max-height: 50vh; } .channel-list-wrapper { height: 220px; max-height: 220px; } }
+        @media(max-width:820px) { body, html { overflow: auto; height: auto; } .app-container { flex-direction: column; height: auto; min-height: 100vh; } .player-section { flex: none; padding: 10px; height: auto; } .video-container { padding-top: 56.25%; min-height: 180px; } .sidebar { min-width: 100%; max-width: 100%; height: auto; border-left: none; border-top: 1px solid var(--border); max-height: 65vh; } .channel-list-wrapper { height: 320px; max-height: 320px; } .channel-list { overflow-y: auto; max-height: 320px; grid-template-columns: repeat(4, 1fr) !important; gap: 4px; padding: 5px 8px; } .channel-item { height: 70px; } .logo-wrapper { width: 32px; height: 32px; } .video-info h1 { font-size: 1.2rem; max-width: 65%; } .notice-bar { font-size: 0.7rem; padding: 6px 14px; } .banner-ad-container { max-height: 70px; min-height: 50px; } }
+        @media(max-width:480px) { .player-section { padding: 6px; } .video-container { min-height: 150px; } .search-container { padding: 4px 8px; } .channel-list-wrapper { height: 260px; max-height: 260px; } .channel-list { padding: 3px 4px; gap: 3px; grid-template-columns: repeat(4, 1fr) !important; max-height: 260px; } .channel-item { height: 60px; padding: 2px; } .logo-wrapper { width: 26px; height: 26px; min-height: 18px; min-width: 18px; padding: 2px; } .channel-name { font-size: 0.42rem; } .channel-status-badge { font-size: 0.3rem; padding: 1px 4px; } .cat-tab { font-size: 0.5rem; padding: 1px 6px; } .video-info h1 { font-size: 0.95rem; max-width: 60%; } .player-loading-overlay .loading-spinner { width: 35px; height: 35px; border-width: 2px; } .player-loading-overlay .loading-logo { width: 45px; height: 45px; } .player-loading-overlay .loading-text { font-size: 0.75rem; } .player-loading-overlay .loading-sub-text { font-size: 0.6rem; } .player-loading-overlay .loading-progress { width: 120px; } .channel-badge { font-size: 0.55rem; padding: 2px 10px; } .notice-bar { font-size: 0.6rem; padding: 4px 12px; gap: 8px; } .notice-bar .notice-icon { width: 22px; height: 22px; font-size: 0.7rem; } .search-header .notice-small { font-size: 0.5rem; padding: 2px 8px; } .banner-ad-container { max-height: 60px; min-height: 40px; } #channel-search { height: 28px; font-size: 0.65rem; padding: 3px 10px; } }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <main class="player-section">
+        <div class="video-container">
+            <div id="main-player"></div>
+            <video id="fallbackVideo" playsinline style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:#000;"></video>
+            <div class="player-loading-overlay" id="playerLoading">
+                <div class="loading-logo" id="loadingLogo"><img src="" alt="Logo" id="loadingLogoImg"></div>
+                <div class="loading-spinner"></div>
+                <div class="loading-text" id="loadingText">Loading...</div>
+                <div class="loading-sub-text" id="loadingSubText">Please wait</div>
+                <div class="loading-progress"><div class="progress-bar"></div></div>
+            </div>
+            <div class="player-error" id="playerError">Select a channel to play</div>
+            <div class="preroll-ad-overlay" id="prerollAdOverlay">
+                <div class="preroll-ad-content" id="prerollAdContent"></div>
+                <button class="preroll-skip-btn" id="prerollSkipBtn" disabled>Skip Ad (<span id="prerollCountdown">8</span>)</button>
+            </div>
+            <select class="audio-track-select" id="audioTrackSelect"></select>
+        </div>
+        <div class="video-info">
+            <h1 id="now-playing-title">Select a Channel</h1>
+            <span class="channel-badge" id="channel-category-badge">Live</span>
+        </div>
+        <div class="banner-ad-container" id="bannerAdContainer">
+            <div id="banner-ad"></div>
+        </div>
+        <div class="native-ad-container" id="nativeAdContainer">
+            <div class="ad-label">Sponsored</div>
+            <div id="native-ad"></div>
+        </div>
+        <div class="notice-bar" id="noticeBar">
+            <div class="notice-icon">i</div>
+            <div class="notice-text-viewport" id="noticeTextViewport">
+                <span class="notice-text" id="noticeText">Welcome to LiveTV!</span>
+            </div>
+            <button class="notice-close" id="noticeCloseBtn">&#10005;</button>
+        </div>
+    </main>
+    <aside class="sidebar">
+        <div class="search-container">
+            <div class="search-header"><div class="notice-small" id="headerNotice">Welcome to LiveTV!</div></div>
+            <div class="loading-bar" id="loadingBar"><div class="progress"></div></div>
+            <input id="channel-search" placeholder="Search channels..." autocomplete="off">
+            <div class="category-tabs" id="category-tabs">
+                <button class="cat-tab active" data-type="all">All</button>
+            </div>
+        </div>
+        <div class="sidebar-ad-container" id="sidebarAdContainer">
+            <div class="ad-label">Sponsored</div>
+            <div id="sidebar-ad"></div>
+        </div>
+        <div class="channel-count-bar"><span>Channels</span><span class="count-num" id="totalChannelCount">0</span></div>
+        <div class="channel-list-wrapper"><ul class="channel-list" id="listbar"></ul></div>
+    </aside>
+</div>
+<button class="admin-hidden-btn" id="adminHiddenBtn">&#9881;</button>
+<a class="telegram-float-btn" id="telegramFloatBtn" href="#" target="_blank" rel="noopener">
+    <svg viewBox="0 0 240 240"><path d="M100 170l-4-56 102-92c4-4-1-6-6-3L58 118l-54-17c-12-4-12-12 2-15L216 30c10-3 19 2 15 18l-32 152c-2 11-9 14-18 8l-50-37-24 23c-3 3-5 5-9 5z"/></svg>
+</a>
+
+<script>
+const API_URL = "api.php";
+const API_KEY = "MySecureKey2026";
+
+let jwInstance = null, isLoading = false, loadingTimeout = null;
+let hlsInstance = null, usingHlsFallback = false;
+let currentChannelName = "", currentLogoUrl = "", currentPlayingIndex = -1;
+let allChannels = [], items = [], activeCategory = "all";
+let noticeText = localStorage.getItem('noticeText') || '';
+let adCodes = {
+    banner: localStorage.getItem('adBanner') || '',
+    sidebar: localStorage.getItem('adSidebar') || '',
+    instream: localStorage.getItem('adInstream') || '',
+    popunder: localStorage.getItem('adPopunder') || '',
+    interstitial: localStorage.getItem('adInterstitial') || '',
+    native: localStorage.getItem('adNative') || ''
+};
+let adEnabled = JSON.parse(localStorage.getItem('adEnabled') || '{}');
+if (Array.isArray(adEnabled)) adEnabled = {};
+function isAdOn(type) { return adEnabled[type] !== false && !!(adCodes[type] && adCodes[type].trim() !== ''); }
+let popunderFired = false;
+let prerollShownThisSession = false;
+let lastInterstitialAt = 0;
+let top20Channels = JSON.parse(localStorage.getItem('top20Channels') || '[]');
+function normalizeVisibility(v) {
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+}
+let categoryVisibility = normalizeVisibility(JSON.parse(localStorage.getItem('categoryVisibility') || '{}'));
+
+const listBar = document.getElementById("listbar");
+const title = document.getElementById("now-playing-title");
+const categoryBadge = document.getElementById("channel-category-badge");
+const search = document.getElementById("channel-search");
+let tabs = document.querySelectorAll(".cat-tab");
+const totalChannelCount = document.getElementById("totalChannelCount");
+const playerError = document.getElementById("playerError");
+const adminHiddenBtn = document.getElementById("adminHiddenBtn");
+const telegramFloatBtn = document.getElementById("telegramFloatBtn");
+const noticeBar = document.getElementById("noticeBar");
+const noticeTextEl = document.getElementById("noticeText");
+const noticeCloseBtn = document.getElementById("noticeCloseBtn");
+const headerNotice = document.getElementById("headerNotice");
+const bannerAdContainer = document.getElementById("bannerAdContainer");
+const bannerAd = document.getElementById("banner-ad");
+const sidebarAdContainer = document.getElementById("sidebarAdContainer");
+const sidebarAd = document.getElementById("sidebar-ad");
+const nativeAdContainer = document.getElementById("nativeAdContainer");
+const nativeAd = document.getElementById("native-ad");
+const noticeTextViewport = document.getElementById("noticeTextViewport");
+const audioTrackSelect = document.getElementById("audioTrackSelect");
+const fallbackVideo = document.getElementById("fallbackVideo");
+const mainPlayerDiv = document.getElementById("main-player");
+const playerLoading = document.getElementById("playerLoading");
+const loadingLogoImg = document.getElementById("loadingLogoImg");
+const loadingText = document.getElementById("loadingText");
+const loadingSubText = document.getElementById("loadingSubText");
+const loadingBar = document.getElementById("loadingBar");
+
+function getDefaultLogo(name) {
+    var initial = name ? name.charAt(0).toUpperCase() : '?';
+    return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(initial) + '&background=7c5cfc&color=fff&size=80&bold=true';
+}
+
+function secureFetch(url, options) {
+    return fetch(url, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY,
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    });
+}
+
+// Escape anything coming from stored/admin-editable data before it goes
+// into innerHTML, so a malicious channel name can't run script for
+// every visitor of the public page.
+function escapeHTML(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function showPlayerLoading(channelName, logoUrl) {
+    isLoading = true;
+    playerLoading.classList.add('show');
+    if (logoUrl && logoUrl !== '') loadingLogoImg.src = logoUrl;
+    else loadingLogoImg.src = getDefaultLogo(channelName);
+    loadingText.textContent = 'Loading ' + channelName + '...';
+    loadingSubText.textContent = 'Buffering...';
+    playerError.style.display = 'none';
+    currentChannelName = channelName;
+    currentLogoUrl = logoUrl;
+}
+
+function hidePlayerLoading() {
+    isLoading = false;
+    playerLoading.classList.remove('show');
+    if (loadingTimeout) { clearTimeout(loadingTimeout); loadingTimeout = null; }
+    clearStallTimer();
+}
+
+function showPlayerError(message) {
+    hidePlayerLoading();
+    playerError.style.display = 'block';
+    playerError.textContent = message || 'Stream could not be loaded';
+}
+
+function injectAdHTML(container, htmlCode) {
+    container.innerHTML = '';
+    if (!htmlCode || htmlCode.trim() === '') return;
+    var temp = document.createElement('div');
+    temp.innerHTML = htmlCode;
+    Array.from(temp.childNodes).forEach(function(node) {
+        if (node.tagName === 'SCRIPT') {
+            var s = document.createElement('script');
+            Array.from(node.attributes).forEach(function(attr) { s.setAttribute(attr.name, attr.value); });
+            s.textContent = node.textContent;
+            container.appendChild(s);
+        } else {
+            container.appendChild(node.cloneNode(true));
+        }
+    });
+}
+
+function showFullscreenAd(code, onDone) {
+    if (!code || code.trim() === '') { onDone(); return; }
+    var overlay = document.getElementById('prerollAdOverlay');
+    var content = document.getElementById('prerollAdContent');
+    var skipBtn = document.getElementById('prerollSkipBtn');
+    var countdownEl = document.getElementById('prerollCountdown');
+    injectAdHTML(content, code);
+    overlay.classList.add('show');
+    var secondsLeft = 8;
+    countdownEl.textContent = secondsLeft;
+    skipBtn.disabled = true;
+    skipBtn.textContent = 'Skip Ad (' + secondsLeft + ')';
+    var timer = setInterval(function() {
+        secondsLeft--;
+        if (secondsLeft <= 0) {
+            clearInterval(timer);
+            skipBtn.disabled = false;
+            skipBtn.textContent = 'Skip Ad ▶';
+        } else {
+            countdownEl.textContent = secondsLeft;
+            skipBtn.textContent = 'Skip Ad (' + secondsLeft + ')';
+        }
+    }, 1000);
+    var finish = function() {
+        clearInterval(timer);
+        overlay.classList.remove('show');
+        content.innerHTML = '';
+        skipBtn.onclick = null;
+        onDone();
+    };
+    skipBtn.onclick = function() { if (!skipBtn.disabled) finish(); };
+}
+
+function triggerPopunderAd() {
+    if (popunderFired || !isAdOn('popunder')) return;
+    popunderFired = true;
+    var code = adCodes.popunder;
+    var trimmed = code.trim();
+    // If the admin just pasted a plain URL, open it directly in a new tab.
+    if (/^https?:\/\//i.test(trimmed) && trimmed.indexOf('<') === -1) {
+        window.open(trimmed, '_blank');
+        return;
+    }
+    // Otherwise treat it as ad-network HTML/JS and let it run (most
+    // popunder network scripts open their own new tab/window on execution).
+    var host = document.createElement('div');
+    host.style.display = 'none';
+    document.body.appendChild(host);
+    injectAdHTML(host, code);
+}
+document.addEventListener('click', triggerPopunderAd, { once: true });
+
+function playChannelWithLoading(ch, index) {
+    if (!prerollShownThisSession && isAdOn('instream')) {
+        prerollShownThisSession = true;
+        lastInterstitialAt = Date.now();
+        showFullscreenAd(adCodes.instream, function() { actuallyPlayChannel(ch, index); });
+        return;
+    }
+    prerollShownThisSession = true;
+    // Interstitial: shown on later channel switches, at most once every 3 minutes so it doesn't annoy.
+    if (isAdOn('interstitial') && (Date.now() - lastInterstitialAt) > 3 * 60 * 1000) {
+        lastInterstitialAt = Date.now();
+        showFullscreenAd(adCodes.interstitial, function() { actuallyPlayChannel(ch, index); });
+        return;
+    }
+    actuallyPlayChannel(ch, index);
+}
+
+function actuallyPlayChannel(ch, index) {
+    var logoUrl = ch.logo && ch.logo !== '' ? ch.logo : getDefaultLogo(ch.name);
+    showPlayerLoading(ch.name, logoUrl);
+    title.textContent = ch.name;
+    categoryBadge.textContent = ch.category || 'Live';
+    document.querySelectorAll('.channel-item').forEach(function(x) { x.classList.remove('active'); });
+    var li = document.querySelector('.channel-item[data-index="' + index + '"]');
+    if (li) li.classList.add('active');
+    currentPlayingIndex = index;
+    audioTrackSelect.classList.remove('show');
+    audioTrackSelect.innerHTML = '';
+    if (!ch.url || !ch.url.startsWith('http')) {
+        showPlayerError('Invalid stream URL');
+        teardownPlayers();
+        return;
+    }
+    teardownPlayers();
+    setupJWPlayer(ch.url);
+    armStallTimer(ch.url, 'jw');
+    loadingTimeout = setTimeout(function() { if (isLoading) loadingSubText.textContent = 'Still loading... Check connection'; }, 10000);
+}
+
+function populateAudioTracks(tracks) {
+    audioTrackSelect.innerHTML = '';
+    if (!tracks || tracks.length < 2) { audioTrackSelect.classList.remove('show'); return; }
+    tracks.forEach(function(t, i) {
+        var opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = t.name || t.label || ('Audio ' + (i + 1));
+        audioTrackSelect.appendChild(opt);
+    });
+    audioTrackSelect.classList.add('show');
+}
+audioTrackSelect.addEventListener('change', function() {
+    var idx = parseInt(audioTrackSelect.value);
+    if (usingHlsFallback && hlsInstance) { try { hlsInstance.audioTrack = idx; } catch(e) { console.log('Audio track switch failed:', e); } }
+    else if (jwInstance) { try { jwInstance.setCurrentAudioTrack(idx); } catch(e) { console.log('Audio track switch failed:', e); } }
+});
+
+function teardownPlayers() {
+    if (jwInstance) { try { jwInstance.remove(); } catch(e) {} jwInstance = null; }
+    if (hlsInstance) { try { hlsInstance.destroy(); } catch(e) {} hlsInstance = null; }
+    try { fallbackVideo.pause(); fallbackVideo.removeAttribute('src'); fallbackVideo.load(); } catch(e) {}
+    fallbackVideo.style.display = 'none';
+    mainPlayerDiv.style.display = '';
+    usingHlsFallback = false;
+}
+
+function proxyEncode(str) {
+    var b64 = btoa(unescape(encodeURIComponent(str)));
+    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function proxiedUrl(url) { return 'proxy.php?url=' + proxyEncode(url); }
+
+// Fallback engine used when JW Player's bundled HLS engine can't handle a
+// stream (a common cause of "channel won't play at all" on multi-audio-track
+// manifests, or on sources that block direct browser requests). hls.js has
+// much more mature multi-audio-track support and exposes it simply via
+// hlsInstance.audioTracks / hlsInstance.audioTrack. If even that fails
+// outright (often a Referer/CORS block from the source), we retry once more
+// through our own server-side proxy, which many other IPTV sites rely on
+// for exactly this reason.
+function setupHlsFallback(url, viaProxy) {
+    usingHlsFallback = true;
+    mainPlayerDiv.style.display = 'none';
+    fallbackVideo.style.display = 'block';
+    var loadUrl = viaProxy ? proxiedUrl(url) : url;
+    if (window.Hls && Hls.isSupported()) {
+        hlsInstance = new Hls();
+        hlsInstance.loadSource(loadUrl);
+        hlsInstance.attachMedia(fallbackVideo);
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+            fallbackVideo.play().catch(function() {});
+            hidePlayerLoading();
+        });
+        hlsInstance.on(Hls.Events.AUDIO_TRACKS_UPDATED, function() {
+            populateAudioTracks((hlsInstance.audioTracks || []).map(function(t) { return { name: t.name || t.lang || 'Audio' }; }));
+        });
+        hlsInstance.on(Hls.Events.ERROR, function(event, data) {
+            console.log('hls.js error:', data.type, data.details, data.fatal, 'viaProxy:', !!viaProxy);
+            if (data.fatal) {
+                if (!viaProxy && (data.type === Hls.ErrorTypes.NETWORK_ERROR || data.type === Hls.ErrorTypes.MEDIA_ERROR)) {
+                    // Direct connection to the source failed outright — this is
+                    // the classic signature of a Referer/CORS-blocked stream.
+                    // Retry once through our own server-side proxy before giving up.
+                    try { hlsInstance.destroy(); } catch(e) {}
+                    setupHlsFallback(url, true);
+                    armStallTimer(url, 'hls-proxy');
+                    return;
+                }
+                if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { hlsInstance.startLoad(); }
+                else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { hlsInstance.recoverMediaError(); }
+                else { hidePlayerLoading(); showPlayerError('Stream error — this channel could not be loaded'); }
+            }
+        });
+    } else if (fallbackVideo.canPlayType('application/vnd.apple.mpegurl')) {
+        // Safari: native HLS, no separate JS engine needed.
+        fallbackVideo.src = loadUrl;
+        var onLoaded = function() {
+            fallbackVideo.play().catch(function() {});
+            hidePlayerLoading();
+            fallbackVideo.removeEventListener('loadedmetadata', onLoaded);
+        };
+        fallbackVideo.addEventListener('loadedmetadata', onLoaded);
+        fallbackVideo.addEventListener('error', function() {
+            if (!viaProxy) { setupHlsFallback(url, true); armStallTimer(url, 'hls-proxy'); return; }
+            hidePlayerLoading();
+            showPlayerError('Stream error — this channel could not be loaded');
+        });
+    } else {
+        hidePlayerLoading();
+        showPlayerError("Your browser can't play this stream");
+    }
+}
+
+let stallTimer = null;
+function clearStallTimer() { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } }
+
+// Some sources never fire a player "error" event when they're actually
+// unreachable (blocked by Referer/CORS, or just silently dead) — the player
+// just sits on "Buffering..." forever. This watchdog escalates through the
+// same JW → hls.js direct → hls.js via proxy chain as a real error would,
+// instead of leaving the viewer stuck looking at a spinner.
+function armStallTimer(url, stage) {
+    clearStallTimer();
+    stallTimer = setTimeout(function() {
+        if (!isLoading) return; // already succeeded (or moved to a different channel) — nothing to do
+        console.log('Playback stalled at stage "' + stage + '" — escalating fallback');
+        if (stage === 'jw') {
+            if (jwInstance) { try { jwInstance.remove(); } catch(e) {} jwInstance = null; }
+            setupHlsFallback(url, false);
+            armStallTimer(url, 'hls-direct');
+        } else if (stage === 'hls-direct') {
+            if (hlsInstance) { try { hlsInstance.destroy(); } catch(e) {} hlsInstance = null; }
+            setupHlsFallback(url, true);
+            armStallTimer(url, 'hls-proxy');
+        } else {
+            hidePlayerLoading();
+            showPlayerError('Stream error — this channel could not be loaded (timed out)');
+        }
+    }, 15000);
+}
+
+function setupJWPlayer(url, isRetry) {
+    try {
+        jwInstance = jwplayer("main-player").setup({
+            file: url, width: "100%", height: "100%", autostart: true, primary: "html5", mute: false
+        });
+        jwInstance.on('ready', hidePlayerLoading);
+        jwInstance.on('play', hidePlayerLoading);
+        // Multi-audio-track channels: JW Player exposes the tracks found in
+        // the HLS manifest here — this is what lets a viewer pick between
+        // e.g. Bangla/English commentary instead of the stream failing to
+        // show anything useful.
+        jwInstance.on('audioTracks', function(e) { populateAudioTracks(e.tracks); });
+        jwInstance.on('audioTrackChanged', function(e) {
+            if (audioTrackSelect.options.length) audioTrackSelect.value = e.currentTrack;
+        });
+        jwInstance.on('error', function(e) {
+            console.log('JW Player error:', e && e.code, e && e.message);
+            if (!isRetry) {
+                // A number of "channel won't play at all" reports turn out to be a
+                // one-time manifest/segment hiccup (common on multi-audio-track
+                // streams where the extra audio playlist is fetched first) — retry
+                // once automatically before falling back.
+                setTimeout(function() { setupJWPlayer(url, true); }, 1200);
+                return;
+            }
+            // JW's bundled engine couldn't play this stream at all — fall back to
+            // hls.js, which has broader multi-audio-track manifest support.
+            if (jwInstance) { try { jwInstance.remove(); } catch(e2) {} jwInstance = null; }
+            setupHlsFallback(url);
+            armStallTimer(url, 'hls-direct');
+        });
+        jwInstance.on('buffer', function() {
+            if (!isLoading) { showPlayerLoading(currentChannelName, currentLogoUrl); loadingSubText.textContent = 'Buffering...'; }
+        });
+    } catch(e) { console.log('JW Player setup error:', e); hidePlayerLoading(); showPlayerError('Failed to load stream'); }
+}
+
+function loadFromLocalStorage() {
+    try {
+        var stored = localStorage.getItem('tvChannels');
+        if (stored) {
+            allChannels = JSON.parse(stored);
+            allChannels.forEach(function(ch) {
+                if (!ch.logo || ch.logo === '') ch.logo = getDefaultLogo(ch.name);
+                if (!ch._status) ch._status = 'unknown';
+            });
+            return true;
+        }
+    } catch(e) { console.error('LocalStorage error:', e); }
+    return false;
+}
+
+function saveToLocalStorage() {
+    try { localStorage.setItem('tvChannels', JSON.stringify(allChannels)); } catch(e) {}
+    updateStats();
+}
+
+function loadAdBanner() {
+    if (isAdOn('banner')) {
+        injectAdHTML(bannerAd, adCodes.banner);
+        bannerAdContainer.classList.add('show');
+    } else { bannerAdContainer.classList.remove('show'); bannerAd.innerHTML = ''; }
+}
+function loadSidebarAd() {
+    if (isAdOn('sidebar')) {
+        injectAdHTML(sidebarAd, adCodes.sidebar);
+        sidebarAdContainer.classList.add('show');
+    } else { sidebarAdContainer.classList.remove('show'); sidebarAd.innerHTML = ''; }
+}
+function loadNativeAd() {
+    if (isAdOn('native')) {
+        injectAdHTML(nativeAd, adCodes.native);
+        nativeAdContainer.classList.add('show');
+    } else { nativeAdContainer.classList.remove('show'); nativeAd.innerHTML = ''; }
+}
+function refreshAllAdSlots() { loadAdBanner(); loadSidebarAd(); loadNativeAd(); }
+
+function detectAdblockAndNotify() {
+    var results = { cosmetic: false, network: false };
+
+    function maybeShowNotice() {
+        var blocked = results.cosmetic || results.network;
+        if (blocked && !localStorage.getItem('adblockNoticeDismissed') && !document.getElementById('adblockNoticeBar')) {
+            var notice = document.createElement('div');
+            notice.id = 'adblockNoticeBar';
+            notice.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(20,20,20,0.97);color:#fff;padding:10px 14px;font-size:0.75rem;display:flex;align-items:center;justify-content:space-between;gap:10px;z-index:999;border-top:1px solid rgba(255,255,255,0.15);';
+            notice.innerHTML = '<span>এই সাইট বিনামূল্যে চালু রাখতে বিজ্ঞাপনের প্রয়োজন — Ad-blocker/DNS ব্লকিং বন্ধ রাখলে আমাদের সাহায্য হয়। 🙏</span>';
+            var closeBtn = document.createElement('button');
+            closeBtn.textContent = '✕';
+            closeBtn.style.cssText = 'background:none;border:none;color:#fff;font-size:1rem;cursor:pointer;flex-shrink:0;';
+            closeBtn.onclick = function() {
+                notice.remove();
+                localStorage.setItem('adblockNoticeDismissed', '1');
+            };
+            notice.appendChild(closeBtn);
+            document.body.appendChild(notice);
+        }
+    }
+
+    // 1) Cosmetic-filter detection (catches browser extensions like uBlock/AdBlock
+    // that hide elements matching known ad-related class names).
+    var bait = document.createElement('div');
+    bait.className = 'adsbox ad-banner ads advertisement';
+    bait.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;';
+    document.body.appendChild(bait);
+    setTimeout(function() {
+        results.cosmetic = (bait.offsetParent === null || bait.offsetHeight === 0);
+        try { document.body.removeChild(bait); } catch(e) {}
+        maybeShowNotice();
+    }, 600);
+
+    // 2) Network-level detection (catches DNS-based blocking like Pi-hole/NextDNS/
+    // AdGuard DNS, which blocks the request itself rather than hiding an element).
+    var testScript = document.createElement('script');
+    var settled = false;
+    var networkTimeout = setTimeout(function() {
+        if (!settled) { settled = true; results.network = true; maybeShowNotice(); }
+    }, 2500);
+    testScript.onerror = function() {
+        if (!settled) { settled = true; clearTimeout(networkTimeout); results.network = true; maybeShowNotice(); }
+    };
+    testScript.onload = function() {
+        setTimeout(function() {
+            if (!settled) {
+                settled = true;
+                clearTimeout(networkTimeout);
+                // Some blockers (Brave Shields, uBlock, AdGuard) don't fail the
+                // request — they serve an empty stub with a 200 OK so onerror
+                // never fires. Real adsbygoogle.js defines window.adsbygoogle,
+                // so if that's missing, the response was substituted/blocked.
+                results.network = (typeof window.adsbygoogle === 'undefined');
+                maybeShowNotice();
+            }
+        }, 150);
+    };
+    testScript.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?_=' + Date.now();
+    document.head.appendChild(testScript);
+}
+detectAdblockAndNotify();
+
+function showLoading() { loadingBar.classList.add('show'); }
+function hideLoading() { loadingBar.classList.remove('show'); }
+
+function updateStats() {
+    var visible = allChannels.filter(function(ch) {
+        var isVisible = categoryVisibility[ch.category] !== false;
+        return ch.status !== 'hidden' && isVisible;
+    });
+    totalChannelCount.textContent = visible.length;
+    tabs.forEach(function(tab) {
+        if (tab.dataset.type === 'all') tab.textContent = 'All (' + visible.length + ')';
+    });
+}
+
+function applyNoticeMarquee() {
+    noticeTextEl.classList.remove('marquee');
+    noticeTextEl.style.removeProperty('--notice-start');
+    noticeTextEl.style.removeProperty('--notice-end');
+    noticeTextEl.style.removeProperty('animation-duration');
+    requestAnimationFrame(function() {
+        var viewportWidth = noticeTextViewport.clientWidth;
+        var textWidth = noticeTextEl.scrollWidth;
+        if (textWidth > viewportWidth) {
+            var distance = viewportWidth + textWidth;
+            var duration = Math.max(8, distance / 55);
+            noticeTextEl.style.setProperty('--notice-start', viewportWidth + 'px');
+            noticeTextEl.style.setProperty('--notice-end', (-textWidth) + 'px');
+            noticeTextEl.style.animationDuration = duration + 's';
+            noticeTextEl.classList.add('marquee');
+        }
+    });
+}
+
+function showNotice(text) {
+    if (text && text !== '') {
+        noticeTextEl.textContent = text;
+        noticeBar.classList.add('show');
+        headerNotice.textContent = text;
+        applyNoticeMarquee();
+    } else {
+        noticeBar.classList.remove('show');
+        headerNotice.textContent = 'Welcome to LiveTV!';
+    }
+}
+window.addEventListener('resize', function() { if (noticeBar.classList.contains('show')) applyNoticeMarquee(); });
+
+function loadFromServer() {
+    showLoading();
+    secureFetch(API_URL)
+    .then(function(response) {
+        return response.json().then(function(data) {
+            if (!response.ok) throw new Error(data.error || 'Server error: ' + response.status);
+            return data;
+        });
+    })
+    .then(function(data) {
+        hideLoading();
+        if (data && data.channels) {
+            allChannels = data.channels;
+            allChannels.forEach(function(ch) {
+                if (!ch.logo || ch.logo === '') ch.logo = getDefaultLogo(ch.name);
+                if (!ch._status) ch._status = 'online';
+                if (!ch.status) ch.status = 'active';
+            });
+            if (data.noticeText) { noticeText = data.noticeText; localStorage.setItem('noticeText', noticeText); showNotice(noticeText); }
+            ['adBanner','adSidebar','adInstream','adPopunder','adInterstitial','adNative'].forEach(function(key) {
+                if (data[key] !== undefined) {
+                    localStorage.setItem(key, data[key]);
+                    adCodes[key.replace('ad', '').toLowerCase()] = data[key];
+                }
+            });
+            if (data.adEnabled) { adEnabled = data.adEnabled; localStorage.setItem('adEnabled', JSON.stringify(adEnabled)); }
+            if (data.telegramLink !== undefined) {
+                localStorage.setItem('telegramLink', data.telegramLink);
+                applyTelegramLink(data.telegramLink);
+            }
+            if (data.top20Channels) { top20Channels = data.top20Channels; localStorage.setItem('top20Channels', JSON.stringify(top20Channels)); }
+            if (data.categoryVisibility) { categoryVisibility = normalizeVisibility(data.categoryVisibility); localStorage.setItem('categoryVisibility', JSON.stringify(categoryVisibility)); }
+            saveToLocalStorage();
+            renderChannels();
+            filterChannels();
+            updateStats();
+            refreshAllAdSlots();
+            console.log('Channels loaded:', allChannels.length);
+            return true;
+        }
+        return false;
+    })
+    .catch(function(error) {
+        hideLoading();
+        console.error('Load error:', error);
+        alert('Error loading data: ' + error.message);
+        if (!loadFromLocalStorage()) {
+            allChannels = [
+                { name: "T Sports", category: "Sports", logo: "", url: "https://bdixserver.tvhunter.top/ant1009/tracks-v1a1/index.m3u8", status: "active", _status: "online" },
+                { name: "BTV National", category: "News", logo: "", url: "https://owrcovcrpy.gpcdn.net/bpk-tv/1709/output/index.m3u8", status: "active", _status: "online" }
+            ];
+            saveToLocalStorage();
+        }
+        var storedNotice = localStorage.getItem('noticeText');
+        if (storedNotice) { noticeText = storedNotice; showNotice(noticeText); }
+        var storedTop20 = localStorage.getItem('top20Channels');
+        if (storedTop20) { try { top20Channels = JSON.parse(storedTop20); } catch(e) {} }
+        var storedVisibility = localStorage.getItem('categoryVisibility');
+        if (storedVisibility) { try { categoryVisibility = normalizeVisibility(JSON.parse(storedVisibility)); } catch(e) {} }
+        refreshAllAdSlots();
+        renderChannels();
+        updateStats();
+        return false;
+    });
+}
+
+function renderCategoryTabs(categoryCount) {
+    var container = document.getElementById('category-tabs');
+    var previousActive = activeCategory;
+
+    var orderedCats = [];
+    allChannels.forEach(function(ch) {
+        if (categoryCount[ch.category] && orderedCats.indexOf(ch.category) === -1) {
+            orderedCats.push(ch.category);
+        }
+    });
+
+    var visibleTotal = 0;
+    Object.keys(categoryCount).forEach(function(c) { visibleTotal += categoryCount[c]; });
+
+    var html = '<button class="cat-tab" data-type="all">All (' + visibleTotal + ')</button>';
+    orderedCats.forEach(function(cat) {
+        html += '<button class="cat-tab" data-type="' + escapeHTML(cat) + '">' + escapeHTML(cat) + ' (' + categoryCount[cat] + ')</button>';
+    });
+    container.innerHTML = html;
+
+    tabs = document.querySelectorAll('.cat-tab');
+    var stillExists = previousActive === 'all' || orderedCats.indexOf(previousActive) !== -1;
+    var activeType = stillExists ? previousActive : 'all';
+    activeCategory = activeType;
+
+    tabs.forEach(function(tab) {
+        if (tab.dataset.type === activeType) tab.classList.add('active');
+        tab.onclick = function() {
+            tabs.forEach(function(t) { t.classList.remove('active'); });
+            tab.classList.add('active');
+            activeCategory = tab.dataset.type;
+            filterChannels();
+        };
+    });
+}
+
+function renderChannels() {
+    var categoryCount = {};
+    items = [];
+    listBar.innerHTML = '';
+    var displayChannels = allChannels.filter(function(ch) {
+        var isVisible = categoryVisibility[ch.category] !== false;
+        return ch.status !== 'hidden' && isVisible;
+    });
+    if (displayChannels.length === 0) {
+        listBar.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);grid-column:1/-1;font-size:0.8rem;">No channels found</div>';
+        return;
+    }
+    var topChannels = [], normalChannels = [];
+    displayChannels.forEach(function(ch) {
+        var isTop = top20Channels.some(function(t) { return t.name === ch.name && t.url === ch.url; });
+        if (isTop) topChannels.push(ch);
+        else normalChannels.push(ch);
+    });
+    topChannels.sort(function(a, b) {
+        var indexA = top20Channels.findIndex(function(t) { return t.name === a.name && t.url === a.url; });
+        var indexB = top20Channels.findIndex(function(t) { return t.name === b.name && t.url === b.url; });
+        return indexA - indexB;
+    });
+    normalChannels.sort(function(a, b) { return allChannels.indexOf(a) - allChannels.indexOf(b); });
+    var sortedChannels = topChannels.concat(normalChannels);
+    sortedChannels.forEach(function(ch, idx) {
+        var originalIndex = allChannels.indexOf(ch);
+        categoryCount[ch.category] = (categoryCount[ch.category] || 0) + 1;
+        var li = document.createElement('li');
+        li.className = 'channel-item';
+        if (ch.status === 'hidden') li.classList.add('hidden-channel');
+        if (ch._status === 'offline' || ch._status === 'dead') li.classList.add('offline-channel');
+        if (currentPlayingIndex === originalIndex) li.classList.add('active');
+        li.dataset.name = ch.name.toLowerCase();
+        li.dataset.category = ch.category;
+        li.dataset.index = originalIndex;
+        var logoUrl = ch.logo && ch.logo !== '' ? ch.logo : getDefaultLogo(ch.name);
+        var statusText = (ch.status === 'active' ? 'Active' : 'Hidden');
+        var statusClass = ch.status;
+        if (ch._status === 'online') { statusText = 'Online'; statusClass = 'online'; }
+        else if (ch._status === 'offline' || ch._status === 'dead') { statusText = 'Offline'; statusClass = 'offline'; }
+        else if (ch._status === 'checking') { statusText = 'Checking...'; statusClass = 'checking'; }
+        li.innerHTML = '<div class="logo-wrapper"><img src="' + escapeHTML(logoUrl) + '" class="channel-logo" alt="' + escapeHTML(ch.name) + '" loading="lazy" decoding="async" onerror="this.src=\'' + getDefaultLogo(ch.name) + '\'"></div><div class="channel-name">' + escapeHTML(ch.name) + '</div><span class="channel-status-badge ' + statusClass + '">' + statusText + '</span>';
+        li.onclick = function(e) {
+            if (ch.status === 'hidden') { alert('This channel is hidden.'); return; }
+            playChannelWithLoading(ch, originalIndex);
+        };
+        listBar.appendChild(li);
+        items.push(li);
+    });
+    var visibleChannels = allChannels.filter(function(ch) {
+        var isVisible = categoryVisibility[ch.category] !== false;
+        return ch.status !== 'hidden' && isVisible;
+    });
+    renderCategoryTabs(categoryCount);
+    var hasActive = document.querySelector('.channel-item.active');
+    if (!hasActive && items.length > 0 && currentPlayingIndex === -1) {
+        var firstVisible = allChannels.findIndex(function(ch) {
+            var isVisible = categoryVisibility[ch.category] !== false;
+            return ch.status !== 'hidden' && isVisible;
+        });
+        if (firstVisible !== -1) {
+            setTimeout(function() {
+                var item = document.querySelector('.channel-item[data-index="' + firstVisible + '"]');
+                if (item) item.click();
+            }, 300);
+        }
+    }
+    updateStats();
+}
+
+function filterChannels() {
+    var q = search.value.toLowerCase().trim();
+    items.forEach(function(i, idx) {
+        var index = parseInt(i.dataset.index);
+        var ch = allChannels[index];
+        if (!ch) { i.style.display = 'none'; return; }
+        if (ch.status === 'hidden') { i.style.display = 'none'; return; }
+        var isVisible = categoryVisibility[ch.category] !== false;
+        if (!isVisible) { i.style.display = 'none'; return; }
+        var matchName = ch.name.toLowerCase().indexOf(q) !== -1;
+        var matchCat = (activeCategory === 'all' || ch.category === activeCategory);
+        i.style.display = (matchName && matchCat) ? 'flex' : 'none';
+    });
+}
+
+search.addEventListener('input', filterChannels);
+tabs.forEach(function(tab) {
+    tab.onclick = function() {
+        tabs.forEach(function(t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        activeCategory = tab.dataset.type;
+        filterChannels();
+    };
+});
+
+adminHiddenBtn.addEventListener('click', function() { window.open('admin.html', '_blank'); });
+noticeCloseBtn.addEventListener('click', function() { noticeBar.classList.remove('show'); });
+
+function scrollChannelListToTop() { if (listBar) listBar.scrollTop = 0; }
+var originalRender = renderChannels;
+renderChannels = function() { originalRender(); setTimeout(scrollChannelListToTop, 150); };
+var originalFilter = filterChannels;
+filterChannels = function() { originalFilter(); setTimeout(scrollChannelListToTop, 100); };
+
+function applyTelegramLink(link) {
+    if (link && link.trim() !== '') {
+        telegramFloatBtn.href = link.trim();
+        telegramFloatBtn.classList.add('show');
+    } else {
+        telegramFloatBtn.classList.remove('show');
+    }
+}
+applyTelegramLink(localStorage.getItem('telegramLink') || '');
+
+refreshAllAdSlots();
+loadFromServer();
+console.log('LiveTV Player loaded (100% Secure)');
+console.log('Total channels: ' + allChannels.length);
+console.log('Admin access: Click gear button at bottom-right');
+</script>
+</body>
+</html>
